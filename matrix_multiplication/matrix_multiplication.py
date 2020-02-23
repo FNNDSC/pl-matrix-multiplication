@@ -11,10 +11,12 @@
 
 from __future__ import division
 from numba import cuda, float32
-import numpy
 import math
+import numpy
 import os
 import sys
+import time
+
 sys.path.append(os.path.dirname(__file__))
 
 # import the Chris app superclass
@@ -22,7 +24,7 @@ from chrisapp.base import ChrisApp
 
 # Controls threads per block and shared memory usage.
 # The computation will be done on blocks of TPBxTPB elements.
-TPB = 16
+TPB = 32
 
 Gstr_title = """
                  _        _                        _ _   _       _ _           _   _             
@@ -144,21 +146,17 @@ class matrix_multiplication(ChrisApp):
 
     @cuda.jit
     def fast_matmul(A, B, C):
-        """
-        Perform matrix multiplication of C = A * B
-        Each thread computes one element of the result matrix C
-        """
-
         # Define an array in the shared memory
         # The size and type of the arrays must be known at compile time
         sA = cuda.shared.array(shape=(TPB, TPB), dtype=float32)
         sB = cuda.shared.array(shape=(TPB, TPB), dtype=float32)
 
         x, y = cuda.grid(2)
-        
+
         tx = cuda.threadIdx.x
         ty = cuda.threadIdx.y
-        
+        bpg = cuda.gridDim.x    # blocks per grid
+
         if x >= C.shape[0] and y >= C.shape[1]:
             # Quit if (x, y) is outside of valid C boundary
             return
@@ -166,7 +164,7 @@ class matrix_multiplication(ChrisApp):
         # Each thread computes one element in the result matrix.
         # The dot product is chunked into dot products of TPB-long vectors.
         tmp = 0.
-        for i in range(int(A.shape[1] / TPB)):
+        for i in range(bpg):
             # Preload data into shared memory
             sA[tx, ty] = A[x, ty + i * TPB]
             sB[tx, ty] = B[tx + i * TPB, y]
@@ -180,24 +178,28 @@ class matrix_multiplication(ChrisApp):
 
             # Wait until all threads finish computing
             cuda.syncthreads()
-
         C[x, y] = tmp
 
-    def run(self, options):
-        """
-        Define the code to be run by this plugin app.
-        """
-        print(Gstr_title)
-        print('Version: %s' % self.get_version())
-        fast_matmul(A, B, C)
+class MatMulBench:
+    #TPB One thread block size
+    #COE TPBxCOE = matrix size(Ract matrix)
+    #DUP will Run DUP times
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            if key == 'COEnumber': self.COE = value
 
+    # Controls threads per block and shared memory usage.
+    # The computation will be done on blocks of TPBxTPB elements.
+    def Run(self) -> float:
+        COE = self.COE
+        start_time = time.time()
         # The data array
-        A = numpy.full((TPB*2, TPB*3), 3, numpy.float) # [32 x 48] matrix containing all 3's
-        B = numpy.full((TPB*3, TPB*1), 4, numpy.float) # [48 x 16] matrix containing all 4's
+        A = numpy.full((TPB*COE, TPB*COE), 3, numpy.float) # [32 x 48] matrix containing all 3's
+        B = numpy.full((TPB*COE, TPB*COE), 4, numpy.float) # [48 x 16] matrix containing all 4's
 
         A_global_mem = cuda.to_device(A)
         B_global_mem = cuda.to_device(B)
-        C_global_mem = cuda.device_array((TPB*2, TPB*1)) # [32 x 16] matrix result
+        C_global_mem = cuda.device_array((TPB*COE, TPB*COE)) # [32 x 16] matrix result
 
         # Configure the blocks
         threadsperblock = (TPB, TPB)
@@ -205,11 +207,10 @@ class matrix_multiplication(ChrisApp):
         blockspergrid_y = int(math.ceil(B.shape[1] / threadsperblock[0]))
         blockspergrid = (blockspergrid_x, blockspergrid_y)
 
-        # Start the kernel 
+        # Start the kernel
         fast_matmul[blockspergrid, threadsperblock](A_global_mem, B_global_mem, C_global_mem)
         res = C_global_mem.copy_to_host()
-
-        print(res)
+        return time.time() - start_time
 
     def show_man_page(self):
         """
@@ -217,7 +218,7 @@ class matrix_multiplication(ChrisApp):
         """
         print(Gstr_synopsis)
 
-
+        
 # ENTRYPOINT
 if __name__ == "__main__":
     chris_app = matrix_multiplication()
