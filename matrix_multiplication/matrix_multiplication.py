@@ -150,8 +150,10 @@ class matrix_multiplication(ChrisApp):
         d_MatrixMultiply = Matrix_Multiply.Run()
 
         # has to be directed to the output directory
-        if args.ElapseTime == 'True':
-            print(d_MatrixMultiply)
+        if options.ElapseTime == 'True':
+            f = open("output.txt","w+")
+            f.write(d_MatrixMultiply)
+            f.close()
 
 
     def show_man_page(self):
