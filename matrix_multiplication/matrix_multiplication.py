@@ -30,12 +30,6 @@ Gstr_title = """
 
 Gstr_synopsis = """
 
-(Edit this in-line help for app specifics. At a minimum, the 
-flags below are supported -- in the case of DS apps, both
-positional arguments <inputDir> and <outputDir>; for FS apps
-only <outputDir> -- and similarly for <in> <out> directories
-where necessary.)
-
     NAME
 
        matrix_multiplication.py 
@@ -151,7 +145,7 @@ class matrix_multiplication(ChrisApp):
 
         # has to be directed to the output directory
         if options.ElapseTime == 'True':
-            f = open("output.txt","w+")
+            f = open("./out/output.txt","w+")
             f.write(d_MatrixMultiply)
             f.close()
 

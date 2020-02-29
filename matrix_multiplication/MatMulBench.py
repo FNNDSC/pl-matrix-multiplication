@@ -54,7 +54,7 @@ class MatMulBench:
 
     # Controls threads per block and shared memory usage.
     # The computation will be done on blocks of TPBxTPB elements.
-    def Run(self) -> float:
+    def Run(self):# -> float:
         COE = self.COE
         start_time = time.time()
         # The data array
